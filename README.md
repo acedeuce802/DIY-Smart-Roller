@@ -20,6 +20,23 @@ Note: Rollers inherently have more resistance than a spin bike or trainer, so th
 
 The initial values table (Z) needs characterized, a characterization file will be provided at a later date.  This file will step through the full range of servo positions while measuring RPM and reporting RPM and servo position to the Serial Monitor.  If power input over BLE is added, data analysis becomes easier, but for now I averaged power for each step on Strava.  To log speed and servo position, [PuTTY was used to log over Serial](https://www.eye4software.com/hydromagic/documentation/articles-and-howtos/serial-port-logging/).  There is some math to be done, since the calibration table has speed and target power with nicely spread out inputs, however the data collected has servo position and speed as the inputs.  I didn't document this, however I used some curve fitting in Excel to find the trends, then calculate the numbers to enter into the calibration table.  To fine tune this table, a custom workout file can be created in the cycling app to target powers from the calibration table, spin the pedals to achieve different speeds from the table, then note/log the servo position that allowed actual power to achieve target power after the cycling app adjusts via PID.
 
+This PCB houses the Xiao ESP32-C3.  I mostly chose this board due to it's size, which to be honest was becuase I was using this board for another project where space is more constrained, but it came in handy to be able to tuck the PCB/case on the inside of the roller frame.  The hall sensor for the speed input connects directly to the PCB and will hang out of the 3d printed enclosure, so the case can be mounted to pick up the magnet on the roller directly.  A 10k resistor is needed for hall sensor pull-up and diode is included so the 5V power supply and USB cable can be connected at the same time.  There are two versions of PCB files attached, one with a 6-pin molex connector, with 3-pins for servo and 3-pins for hall sensor and a PCB mounted DC jack.  The other version has pads for the external components, with the intention of hard wiring the servo and DC jack wires, running internal to the frame, mounting the DC jack directly to the frame end cap, and mounting the PCB close enough to the roller for the direct mounted hall sensor.
+
+![image](https://github.com/acedeuce802/DIY-Smart-Roller/assets/37642264/7512d4a8-5cb4-4c3c-a02b-d1fd64c8bfd3)
+
+![image](https://github.com/acedeuce802/DIY-Smart-Roller/assets/37642264/15237561-8b81-457e-9137-f694e0075fa9)
+
+Molex Mini Fit Jr Pinout:
+1. Servo 5V
+2. Servo GND
+3. Servo Signal
+4. Hall 5V
+5. Hall GND
+6. Hall Signal
+
+
+
+
 Parts list:
 Coming soon
 
