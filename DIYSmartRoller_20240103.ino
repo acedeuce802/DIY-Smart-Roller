@@ -67,8 +67,10 @@ int total = 0;                  // the running total
 int speedAverage = 0;           // the average
 
 //Simulation bounds and variables
-const int upperInclineClamp = 10;
-const int lowerInclineClamp = -5;  //changed from -10
+const int upperInclineClamp = 15;
+const int lowerInclineClamp = -10;
+const int minServoPos = 1300; //Used to linear interpolate grade to servo position
+const int maxServoPos = 1844;
 
 float gradeFloat = 0.0;
 int_least16_t grade = 0;
@@ -259,8 +261,9 @@ void loop() {
           {
             Serial.println("case 5");
             int16_t power = rxValue[1] + 256 * rxValue[2];
-            
-
+            newPos = bilinearXY(speedAverage, power);  //get servo position from bilinear interpolated array
+            myservo.writeMicroseconds(servoPin, newPos); //Write value to servo, uses writeMicroseconds rather than writeServo for finer control
+             
             FTMSDEVICE_INDOOR_BIKE_CHARData[6] = (uint8_t)(constrain(power, 0, 4000) & 0xff);
             FTMSDEVICE_INDOOR_BIKE_CHARData[7] = (uint8_t)(constrain(power, 0, 4000) >> 8);  // power value, constrained to avoid negative values, although the specification allows for a sint16
 
@@ -332,9 +335,21 @@ void loop() {
             roundedGrade = lowerInclineClamp;
           }
           if (roundedGrade == currentBikeGrade) {
-            delay(275);  //provides a delay for  the no change condition- same as other for uniformity
+            //delay(275);  //provides a delay for  the no change condition- same as other for uniformity
           }
-
+           
+          if (speedAverage < 500)
+          {
+            newPos = minServoPos;
+          }
+           else
+          {
+          newPos = map(roundedGrade,lowerInclineClamp,upperInclineClamp,minServoPos,maxServoPos);
+          }
+          myservo.writeMicroseconds(servoPin, newPos); //Write value to servo, uses writeMicroseconds rather than writeServo for finer control
+         // Serial.print("Pos =");
+         // Serial.println(newPos);
+           
           //delay(1000);
           // Serial.println("One Second Delay");
           break;
@@ -343,7 +358,7 @@ void loop() {
     while (millis() - whileMillis < 500 ) //After 0x05 breaks, run control code for 500ms without respamming BLE bus
     {
       rpmRead();
-      setServo();
+     // setServo();
     }
     whileMillis = millis() ;
   }
@@ -397,6 +412,7 @@ void rpmRead() {
 
 }
 
+/*
 void setServo()
 {
   newPos = bilinearXY(speedAverage, power);  //get servo position from bilinear interpolated array
@@ -416,6 +432,7 @@ void setServo()
     Serial.print("Pos =");
     Serial.println(pos);
 };
+*/
 
 double bilinearXY(int x, int y) {
   int xIndex, yIndex;
