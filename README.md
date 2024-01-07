@@ -7,6 +7,9 @@ Neodymium magnets have been used to increase the resistance in cycling rollers f
 
 ![](https://github.com/acedeuce802/DIY-Smart-Roller/blob/main/Servo_Moving.gif)
 
+![image](https://github.com/acedeuce802/DIY-Smart-Roller/assets/37642264/3723922f-0f4a-4bd6-ba4d-0d7146d86480)
+
+
 ## How This All Works
 ### The general flow of the control is as follows:
   1. ESP32 initializes FTMS BLE service and user selects ESP32 as a controllable smart trainer
