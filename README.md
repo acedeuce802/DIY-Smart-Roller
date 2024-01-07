@@ -5,6 +5,8 @@ This project uses a sled of magnets, mounted to cycling rollers via linear beari
 
 Neodymium magnets have been used to increase the resistance in cycling rollers for quite some time, however I've only seen them used on a fixed mount, turning them into a "mag resistance trainer" where power increases versus speed.  I stumbled across several projects of attaching steppers to spin bike resistance knobs, making button presses for spin bikes with digital buttons for resistance, etc, which made me think that it must not be too difficult to adapt this to the magnet theory for rollers.  Ever since I got my set of rollers (for $20!), I've been researching off-the-shelf smart rollers, but it quickly comes to a halt when I remember that the "cheap" ones are ~$900, and the expensive ones are $1400-2100.
 
+![](https://github.com/acedeuce802/DIY-Smart-Roller/blob/main/Servo_Moving.gif)
+
 ## How This All Works
 ### The general flow of the control is as follows:
   1. ESP32 initializes FTMS BLE service and user selects ESP32 as a controllable smart trainer
