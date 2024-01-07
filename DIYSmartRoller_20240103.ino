@@ -27,28 +27,33 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <LCD_I2C.h>
+#include <HardwareSerial.h>
 #include <Servo.h>
-
-//Pin Designations
-const int servoPin = 10; //Servo pin
-int sensPin = 8;  //Hall sensor pin for speed input
-
-//Random variables
+//#include <Smoothed.h>
 int power = 0;
 
 //Servo stuff
+const int servoPin = 10;
 int pos = 0;
-int newPos;
-int diffPos;
+float newPos;
+float diffPos;
 uint32_t prevMs;
 Servo myservo = Servo();
 
 //RPM stuff
+//Smoothed<float> mySensor;
+
+unsigned long startMillis;
+unsigned long currentMillis;
 unsigned long whileMillis;
+const unsigned long period = 10;
+
 unsigned long millisValue = 0;
 
-int Speed = 0;
-const int Wheel_circumference = 85;  //Roller diameter, or whatever the pickup is on
+float Speed = 0;
+float SpeedSmooth = 0;
+const int Wheel_circumference = 85;
 
 bool MagRead_Last_state;
 bool MagRead_Current_state;
@@ -58,15 +63,15 @@ int MagRead_Last_state_isonMove_Millis_Gap = Wheel_circumference * 36;
 
 bool isonMove = false;
 
-//RPM Smoothing  https://academy.programmingelectronics.com/tutorial-23-smoothing-data-old-version/
-const int numReadings = 5;     //Higher number = more reading smoothed, less response
+unsigned long total_time_onMove = 0;
+unsigned long total_cm_onMove = 0;
 
-int readings[numReadings];      // the readings from the analog input
-int readIndex = 0;              // the index of the current reading
-int total = 0;                  // the running total
-int speedAverage = 0;           // the average
+int sensPin = 8;
 
-//Simulation bounds and variables
+//Start second Serial bus, pin 6/7
+//HardwareSerial MySerial(0);   //Create a new HardwareSerial class.
+
+//Not needed, may take out and delete 0x11 case
 const int upperInclineClamp = 10;
 const int lowerInclineClamp = -5;  //changed from -10
 
@@ -77,7 +82,6 @@ int roundedGrade = 0;
 int currentBikeGrade = 0;
 
 // https://forum.arduino.cc/t/bilinear-interpolation/438590/7
-// Create bilinear interpolation for inputs speed and target power to output servo position
 // Those arrays needs to be sorted in ascending order
 // Need at least 2 points
 
@@ -153,9 +157,11 @@ class MyServerCallbacks : public BLEServerCallbacks {
 void setup() {
 
   Serial.begin(115200);
+  startMillis = millis();
   pinMode(sensPin, INPUT);
   MagRead_Last_state = digitalRead(sensPin);
-
+  //mySensor.begin(SMOOTHED_AVERAGE, 10);
+  //MySerial.begin(115200, SERIAL_8N1, RX, TX); // at CPU Freq is 40MHz, work half speed of defined, needed for second Serial bus
   Serial.println("Starting initialisation routine");
 
   //Setup BLE
@@ -237,6 +243,9 @@ void loop() {
     if (rxValue.length() == 0) {
       Serial.println("No data received...");
     } else {
+      Serial.println("Switch");
+      Serial.println(rxValue[0], DEC);
+      //delay(500);
       uint8_t value[3] = { 0x80, (uint8_t)rxValue[0], 0x02 };  // confirmation data, default - 0x02 - Op "Code not supported", no app cares
       switch (rxValue[0]) {
         case 0x00:  //Request control from zwift
@@ -258,23 +267,44 @@ void loop() {
         case 0x05:
           {
             Serial.println("case 5");
+            //int16_t power = rxValue[1];
             int16_t power = rxValue[1] + 256 * rxValue[2];
-            
+            //rpmRead();
+            //Speed = 1200;
+            newPos = bilinearXY(Speed, power);
+          
+            //myservo.write(servoPin, power * 0.8);
+            //delay(100);
+            //Serial.println("case 5");
+            //MySerial.write(power);
 
-            FTMSDEVICE_INDOOR_BIKE_CHARData[6] = (uint8_t)(constrain(power, 0, 4000) & 0xff);
-            FTMSDEVICE_INDOOR_BIKE_CHARData[7] = (uint8_t)(constrain(power, 0, 4000) >> 8);  // power value, constrained to avoid negative values, although the specification allows for a sint16
 
-            // Send back power if rollers are moving, apps won't PID target power if they don't receive "trainer power"
-            // Since we don't have "trainer power", spoof power=target power
-            // App will now adjust target power based on difference between value from power meter, and spoofed power
-            // If we spam power back all the time, app won't pause
-            if (Speed > 100) 
-            {
-              pIndoorBike->setValue(FTMSDEVICE_INDOOR_BIKE_CHARData, 8);  // values sent
-              pIndoorBike->notify();
+            //newPos = bilinearXY(Speed,power);
+
+            diffPos = newPos - pos;
+
+            if (newPos > pos && diffPos > 10) {
+              pos = pos + 5;
+            } else if (newPos < pos && diffPos < 10) {
+              pos = pos - 5;
+            } else {
+              pos = newPos;
             }
+              myservo.writeMicroseconds(servoPin, newPos);
+              Serial.print("Pos =");
+              Serial.println(newPos);
+              // Serial.print("Pos =");
+              // Serial.println(newPos);
+              //Serial.println("made to the end of case 5");
+              FTMSDEVICE_INDOOR_BIKE_CHARData[6] = (uint8_t)(constrain(power, 0, 4000) & 0xff);
+              FTMSDEVICE_INDOOR_BIKE_CHARData[7] = (uint8_t)(constrain(power, 0, 4000) >> 8);  // power value, constrained to avoid negative values, although the specification allows for a sint16
+
+              if (Speed > 1) {
+                pIndoorBike->setValue(FTMSDEVICE_INDOOR_BIKE_CHARData, 8);  // values sent
+                pIndoorBike->notify();
+              }
             
-            //Serial.println("End of case 5");
+            Serial.println("made to the end of case 5");
           }
           break;
 
@@ -285,6 +315,15 @@ void loop() {
           pControlPoint->indicate();
           Serial.println("case 7");
           break;
+
+          /*
+         case 0x80:
+          replyDs[1] = 0x05;
+          //pControlPoint->setValue(replyDs, 3);
+          //pControlPoint->indicate();
+          Serial.println("case 80");
+          break;
+*/
 
         case 0x11:  //receive simulation parameters
           Serial.println("case 11");
@@ -311,6 +350,11 @@ void loop() {
             gradeFloat = (gradeFloat * 2);
           }
 
+
+
+
+
+
           // Serial.print("gradeFloat= ");
           // Serial.println(gradeFloat);
           //Serial.print("wind speed= ");
@@ -320,7 +364,11 @@ void loop() {
           //Serial.print("Wind Res= ");
           //Serial.println(Wres);
 
+
+
           roundedGrade = round(gradeFloat);
+
+
 
           //  Serial.print("rounded grade = ");
           // Serial.println(roundedGrade);
@@ -335,15 +383,19 @@ void loop() {
             delay(275);  //provides a delay for  the no change condition- same as other for uniformity
           }
 
+
+
+
           //delay(1000);
           // Serial.println("One Second Delay");
           break;
       }
     }
-    while (millis() - whileMillis < 500 ) //After 0x05 breaks, run control code for 500ms without respamming BLE bus
+    //delay(50);  // Delay to stop bluetooth stack getting congested-added to slow down incline changes
+    // changed from 50
+    while (millis() - whileMillis < 500 )
     {
       rpmRead();
-      setServo();
     }
     whileMillis = millis() ;
   }
@@ -362,7 +414,23 @@ void loop() {
 }
 
 void rpmRead() {
+  //delay(5);
   MagRead_Current_state = !digitalRead(sensPin);
+  /*Serial.print("Current state =");
+  Serial.println(MagRead_Current_state);
+  Serial.print("Last state =");
+  Serial.println(MagRead_Last_state);
+  Serial.print("Millis =");
+  Serial.println(millisValue);
+  Serial.print("Last state Change =");
+  Serial.println(MagRead_Last_state_Change);
+  */
+  //mySensor.add(Speed);
+ // Serial.print("Speed =");
+  //Serial.println(Speed);
+  //Serial.println(mySensor.get());
+  //Serial.println(isonMove);
+  //SpeedSmooth = mySensor.get();
 
   if (MagRead_Last_state_Change + MagRead_Last_state_isonMove_Millis_Gap < millis()) {
     Speed = 0;
@@ -383,39 +451,9 @@ void rpmRead() {
     }
     MagRead_Last_state = MagRead_Current_state;
   }
-
-  total = total - readings[readIndex];
-  readings[readIndex] = Speed; // read Speed into array
-  total = total + readings[readIndex]; // add the reading to the total:
-  readIndex = readIndex + 1; // advance to the next position in the array:
-
-  if (readIndex >= numReadings) // if we're at the end of the array, go back to beginning
-  { 
-    readIndex = 0;
-  }
-  speedAverage = total / numReadings; // calculate the average:
-
+  //Serial.println("RPM stuff");
 }
 
-void setServo()
-{
-  newPos = bilinearXY(speedAverage, power);  //get servo position from bilinear interpolated array
-
-  diffPos = newPos - pos;  //calc position differential, to have if/then step the servo by predertimined amount rather than jump to new position
-
-  if (newPos > pos && diffPos > 10) 
-    {
-      pos = pos + 5;
-    } else if (newPos < pos && diffPos < 10) {
-      pos = pos - 5;
-    } else {
-      pos = newPos;
-    }
-    
-    myservo.writeMicroseconds(servoPin, pos); //Write slowly stepped value to servo, uses writeMicroseconds rather than writeServo for finer control
-    Serial.print("Pos =");
-    Serial.println(pos);
-};
 
 double bilinearXY(int x, int y) {
   int xIndex, yIndex;
